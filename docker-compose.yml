@@ -1,0 +1,53 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-toko_buah}
+      POSTGRES_USER: ${POSTGRES_USER:-toko}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-toko_dev_password}
+      TZ: Asia/Jakarta
+    command: ['postgres', '-c', 'timezone=Asia/Jakarta']
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+      - ./database/seed.sql:/docker-entrypoint-initdb.d/002-seed.sql:ro
+      - ./database/test-db.sql:/docker-entrypoint-initdb.d/003-test-db.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-toko} -d ${POSTGRES_DB:-toko_buah}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-toko}:${POSTGRES_PASSWORD:-toko_dev_password}@db:5432/${POSTGRES_DB:-toko_buah}
+      JWT_SECRET: ${JWT_SECRET:-local-only-change-me-please-32-characters}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      PORT: 4000
+      TZ: Asia/Jakarta
+      STORE_NAME: ${STORE_NAME:-Toko Buah Segar}
+      STORE_ADDRESS: ${STORE_ADDRESS:-Jl. Buah Segar No. 12, Jakarta}
+      NODE_ENV: production
+    ports: ['4000:4000']
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      db:
+        condition: service_healthy
+  frontend:
+    build: ./frontend
+    ports: ['5173:80']
+    depends_on:
+      backend:
+        condition: service_healthy
+volumes:
+  postgres_data:
