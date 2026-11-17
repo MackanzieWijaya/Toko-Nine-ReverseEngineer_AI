@@ -16,5 +16,8 @@
     "lucide-react": "^0.468.0",
     "recharts": "^3.10.1"
   },
-  "devDependencies": {}
+  "devDependencies": {},
+  "allowScripts": {
+    "esbuild@0.25.12": true
+  }
 }

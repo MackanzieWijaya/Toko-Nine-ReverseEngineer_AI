@@ -2,13 +2,15 @@
 
 Aplikasi kasir dan inventori toko buah berbahasa Indonesia. Frontend menggunakan React dan Vite, API menggunakan Express, dan data disimpan di PostgreSQL. Docker Compose menjalankan ketiga layanan tersebut.
 
+## Persyaratan
+
+- **Semua cara:** Git untuk clone repository, serta port `5173` dan `4000` yang tersedia.
+- **Dengan Docker:** Docker Desktop (Windows/macOS) atau Docker Engine (Linux), termasuk Docker Compose v2. Node.js dan PostgreSQL tidak perlu dipasang di komputer host.
+- **Tanpa Docker (manual):** Node.js 22 atau lebih baru (termasuk npm), PostgreSQL 16 atau lebih baru, dan alat command-line `psql`. Pastikan server PostgreSQL berjalan sebelum backend.
+
+Pilih salah satu cara: Docker menjalankan database, backend, dan frontend sekaligus; cara manual menjalankan PostgreSQL lokal, lalu backend dan frontend di terminal terpisah.
+
 ## Menjalankan dengan Docker
-
-### Persyaratan
-
-- Docker Desktop (Windows/macOS) atau Docker Engine (Linux)
-- Docker Compose v2
-- Port `5173` dan `4000` tersedia
 
 PostgreSQL berjalan di jaringan internal Docker dan tidak membuka port `5432` ke komputer host secara default.
 
@@ -68,51 +70,137 @@ Schema dan seed hanya dijalankan otomatis saat volume PostgreSQL pertama kali di
 - Jika backend `unhealthy`, pastikan database `healthy` terlebih dahulu. Backend baru dinyatakan sehat jika dapat terhubung ke PostgreSQL.
 - Setelah mengubah kode, jalankan ulang `docker compose up -d --build` agar image diperbarui.
 
-## Menjalankan tanpa Docker
+## Menjalankan secara manual (tanpa Docker)
 
-Mode ini memerlukan Node.js 22+, PostgreSQL, dan `psql`.
+Langkah berikut menjalankan PostgreSQL, backend API, dan frontend secara terpisah. Contoh ini memakai database `toko_buah`, user database `toko`, dan password `password`. Anda boleh mengganti nilainya, tetapi gunakan nilai yang sama di semua langkah. Untuk memudahkan setup lokal, contoh password tidak memakai karakter khusus URL seperti `@`, `:`, `/`, atau `#`.
 
-1. Buat database PostgreSQL, lalu jalankan schema dan seed:
+### 1. Pasang dan jalankan PostgreSQL
 
-   ```sh
-   psql "postgres://toko:password@localhost:5432/toko_buah" -f database/schema.sql
-   psql "postgres://toko:password@localhost:5432/toko_buah" -f database/seed.sql
+#### Windows
+
+1. Pasang PostgreSQL untuk Windows. Installer biasanya menyertakan **SQL Shell (psql)** dan mendaftarkan server sebagai Windows service. Catat password yang Anda buat untuk akun administrator `postgres`. Pasang juga Node.js 22+.
+2. Pastikan server berjalan. Buka **Services** dari Start menu (atau jalankan `services.msc`), cari layanan seperti `postgresql-x64-16`, lalu pilih **Start** bila belum berjalan. Nama layanan bergantung versi. Dari PowerShell Administrator, Anda juga dapat mencari dan memulainya:
+
+   ```powershell
+   Get-Service *postgres*
+   Start-Service postgresql-x64-16
    ```
 
-   Ganti `toko`, `password`, dan `toko_buah` sesuai database lokal Anda.
+   Ganti nama service pada perintah kedua dengan nama yang ditemukan. Jika PowerShell tidak mengenali `psql`, buka **SQL Shell (psql)** dari Start menu atau tambahkan folder `bin` PostgreSQL ke PATH, misalnya `C:\Program Files\PostgreSQL\16\bin`.
 
-2. Di terminal pertama, atur variabel backend agar `DATABASE_URL` menunjuk ke PostgreSQL host (`localhost`, bukan nama layanan Docker `db`), lalu jalankan API:
+#### macOS
 
-   ```sh
-   cd backend
-   npm ci
-   export DATABASE_URL='postgres://toko:password@localhost:5432/toko_buah'
-   export JWT_SECRET='secret-lokal-panjang-untuk-pengembangan'
-   npm run dev
-   ```
+Cara Homebrew: pasang Homebrew jika belum ada, lalu di Terminal jalankan:
 
-   Di PowerShell, atur variabel dengan `$env:DATABASE_URL = '...'` dan `$env:JWT_SECRET = '...'`.
+```sh
+brew install node postgresql@16
+brew services start postgresql@16
+brew services list
+```
 
-3. Di terminal kedua, atur URL API untuk Vite dan jalankan frontend:
+Jika versi/formula PostgreSQL yang dipasang berbeda, gunakan nama formula itu pada perintah `brew services`. Cara lain adalah memasang **Postgres.app**, membukanya, lalu klik **Initialize** bila diminta; server akan berjalan selama aplikasi aktif. Buka Terminal untuk memakai `psql`.
 
-   ```sh
-   cd frontend
-   npm ci
-   ```
+#### Linux
 
-   Buat `frontend/.env.local` berisi:
+Pasang PostgreSQL, paket client yang menyediakan `psql`, dan Node.js 22+ melalui package manager distribusi Anda. Pada distro yang memakai systemd, mulai dan cek server dengan:
 
-   ```env
-   VITE_API_URL=http://localhost:4000/api
-   ```
+```sh
+sudo systemctl start postgresql
+sudo systemctl status postgresql
+```
 
-   Lalu jalankan:
+Nama layanan dan langkah instalasi dapat berbeda antar distribusi.
 
-   ```sh
-   npm run dev
-   ```
+### 2. Buat user dan database aplikasi
 
-   Buka **http://localhost:5173**. CORS backend secara default mengizinkan alamat tersebut.
+Pastikan PostgreSQL berjalan. Dari terminal, sambungkan sebagai administrator:
+
+```sh
+psql -U postgres -h localhost -p 5432
+```
+
+Masukkan password administrator `postgres` saat diminta. Jika berhasil, akan tampil prompt `postgres=#`. Jalankan perintah SQL berikut **di dalam psql**:
+
+```sql
+CREATE USER toko WITH PASSWORD 'password';
+CREATE DATABASE toko_buah OWNER toko;
+\q
+```
+
+`\q` menutup psql. Di Linux, autentikasi lokal kadang menolak `psql -U postgres`; sebagai gantinya jalankan `sudo -u postgres psql`, lalu masukkan SQL yang sama. Jika user atau database sudah ada, gunakan yang sudah ada dan pastikan user `toko` memiliki password yang diketahui serta menjadi pemilik database `toko_buah`.
+
+Di macOS dengan Homebrew atau Postgres.app, akun admin yang tersedia bisa memakai nama akun macOS Anda, bukan `postgres`. Jika perintah di atas melaporkan role `postgres` tidak ditemukan, coba `psql -d postgres` untuk masuk sebagai akun macOS, lalu jalankan SQL yang sama di prompt psql. Pada instalasi Windows, Anda juga bisa membuka **SQL Shell (psql)** dari Start menu, menekan Enter untuk menerima host `localhost`, port `5432`, dan user `postgres`, lalu memasukkan password admin.
+
+### 3. Muat schema dan data contoh
+
+Buka terminal di **folder root proyek**, yaitu folder yang berisi `database`, `backend`, dan `frontend`. Jalankan perintah berikut; masukkan password user aplikasi (`password` pada contoh) saat diminta:
+
+```sh
+psql -h localhost -p 5432 -U toko -d toko_buah -f database/schema.sql
+psql -h localhost -p 5432 -U toko -d toko_buah -f database/seed.sql
+```
+
+Perintah yang sama berlaku di PowerShell. Schema dan seed hanya perlu dimuat saat membuat database baru. Seed memasukkan akun pengembangan dan data fiktif yang disebutkan pada bagian [Akun pengembangan](#akun-pengembangan).
+
+### 4. Jalankan backend
+
+Buka terminal pertama di root proyek, masuk ke folder backend, pasang dependency, lalu jalankan API. Biarkan terminal ini tetap terbuka.
+
+**Windows PowerShell:**
+
+```powershell
+cd backend
+npm ci
+$env:DATABASE_URL = 'postgres://toko:password@localhost:5432/toko_buah'
+$env:JWT_SECRET = 'secret-lokal-panjang-untuk-pengembangan'
+npm run dev
+```
+
+**macOS / Linux (bash atau zsh):**
+
+```sh
+cd backend
+npm ci
+export DATABASE_URL='postgres://toko:password@localhost:5432/toko_buah'
+export JWT_SECRET='secret-lokal-panjang-untuk-pengembangan'
+npm run dev
+```
+
+Environment variable tersebut berlaku untuk terminal tempat backend berjalan. Jika terminal ditutup, atur kembali variabel saat memulai backend berikutnya. API tersedia di **http://localhost:4000**; periksa **http://localhost:4000/health**.
+
+### 5. Jalankan frontend
+
+Buka terminal kedua di root proyek (backend tetap berjalan), lalu masuk ke folder frontend dan pasang dependency.
+
+**Windows PowerShell:**
+
+```powershell
+cd frontend
+npm ci
+Set-Content -Path .env.local -Value 'VITE_API_URL=http://localhost:4000/api'
+npm run dev
+```
+
+**macOS / Linux (bash atau zsh):**
+
+```sh
+cd frontend
+npm ci
+cat > .env.local <<'EOF_ENV'
+VITE_API_URL=http://localhost:4000/api
+EOF_ENV
+npm run dev
+```
+
+Buka aplikasi di **http://localhost:5173**. Hentikan server frontend dan backend dengan `Ctrl+C` di terminal masing-masing. PostgreSQL dapat tetap berjalan sebagai service. Untuk menghentikannya, gunakan Services di Windows, `brew services stop postgresql@16` pada Homebrew/macOS, atau `sudo systemctl stop postgresql` pada Linux.
+
+### Jika koneksi gagal
+
+- Pastikan PostgreSQL berjalan dan menerima koneksi di `localhost:5432`.
+- Pastikan nama database, user, dan password pada `DATABASE_URL` cocok. Untuk setup manual, host harus `localhost` (bukan nama service Docker `db`).
+- Jika `psql` tidak dikenali, gunakan SQL Shell/PostgreSQL command prompt atau tambahkan folder executable PostgreSQL ke PATH.
+- Jika backend gagal tersambung, periksa error di terminal backend. Jika frontend tidak dapat memanggil API, pastikan backend berjalan dan `VITE_API_URL` berisi `http://localhost:4000/api`.
+- Jika port `4000` atau `5173` sudah dipakai, hentikan proses yang menggunakannya.
 
 ## Konfigurasi
 
