@@ -19,8 +19,8 @@ PostgreSQL berjalan di jaringan internal Docker dan tidak membuka port `5432` ke
 Jika mendapatkan proyek dari GitHub, clone repo (ganti contoh nama di bawah dengan URL dan nama repo Anda):
 
 ```sh
-git clone https://github.com/USERNAME/NAMA-REPO.git
-cd NAMA-REPO
+git clone https://github.com/MackanzieWijaya/Toko-Nine-ReverseEngineer_AI
+cd Toko-Nine-ReverseEngineer_AI
 [ -f .env ] || cp .env.example .env
 docker compose up -d --build
 ```
